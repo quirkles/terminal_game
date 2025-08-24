@@ -68,7 +68,7 @@ impl Console {
 
         let particle_coordinates: Vec<ConsoleCell> = particles
             .iter()
-            .map(|particle| particle.position.to_cell())
+            .map(|particle| particle.get_position().to_cell())
             .collect();
 
         for console_j in 1..self.cell_height - 1 {
