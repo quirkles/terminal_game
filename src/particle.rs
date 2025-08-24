@@ -1,5 +1,5 @@
 use crate::console::Console;
-use crate::spatial::{Coordinate, SUBPIXEL_SCALE};
+use crate::spatial::{Coordinate};
 
 pub struct Particle {
     position: Coordinate, // In subpixel coordinates
@@ -23,6 +23,15 @@ impl Particle {
     pub fn get_position(&self) -> Coordinate {
         self.position
     }
+
+    pub fn get_velocity(&self) -> Coordinate {
+        self.velocity
+    }
+
+    pub fn get_acceleration(&self) -> Coordinate {
+        self.acceleration
+    }
+
 
     pub fn set_acceleration(&mut self, acceleration: Coordinate) {
         self.acceleration = acceleration;

@@ -1,8 +1,8 @@
-use crossterm::QueueableCommand;
 use crossterm::cursor::{Hide, MoveToColumn, MoveToRow};
-use crossterm::terminal::{Clear, ClearType};
+use crossterm::style::Print;
+use crossterm::{QueueableCommand};
 use std::io::{stdout, Write};
-
+use crossterm::terminal::{Clear, ClearType};
 use crate::border::BorderChars;
 use crate::particle::Particle;
 use crate::spatial::{ConsoleCell, SUBPIXEL_SCALE};
@@ -43,14 +43,14 @@ impl Console {
     }
 
     pub fn draw_borders(&self) -> &Self {
-        stdout().queue(Clear(ClearType::All)).unwrap();
         let mut stdout = stdout();
+        stdout.queue(Clear(ClearType::All)).unwrap();
 
         for console_j in 0..self.cell_height {
             stdout.queue(MoveToRow(console_j)).unwrap();
 
             for console_i in 0..self.cell_width {
-                stdout.queue(MoveToColumn(console_i as u16)).unwrap();
+                stdout.queue(MoveToColumn(console_i)).unwrap();
 
                 if let Some(border_char) = Self::get_border_char(console_j, console_i, self.cell_height, self.cell_width) {
                     stdout.write(border_char.to_string().as_bytes()).unwrap();
@@ -86,5 +86,47 @@ impl Console {
                 stdout.flush().unwrap();
             }
         }
+
+        // Display velocity and acceleration information underneath the box
+        for (_, particle) in particles.iter().enumerate() {
+            let v = particle.get_velocity();
+            let acc = particle.get_acceleration();
+            let pos = particle.get_position();
+
+            let info_row = self.cell_height + 1;
+
+
+            stdout.queue(MoveToRow(info_row)).unwrap();
+            stdout.queue(MoveToColumn(1)).unwrap();
+            stdout.queue(
+                Print(
+                    format!(
+                        "x={}, y={}", pos.x, pos.y
+                    )
+                )
+            ).unwrap();
+
+            stdout.queue(MoveToRow(info_row + 1)).unwrap();
+            stdout.queue(MoveToColumn(1)).unwrap();
+            stdout.queue(
+                Print(
+                    format!(
+                        "vx={}, vy={}", v.x, v.y
+                    )
+                )
+            ).unwrap();
+            stdout.queue(MoveToRow(info_row + 1)).unwrap();
+
+            stdout.queue(MoveToRow(info_row + 2)).unwrap();
+            stdout.queue(MoveToColumn(1)).unwrap();
+            stdout.queue(
+                Print(
+                    format!(
+                        "ax={}, ay={}", acc.x, acc.y
+                    )
+                )
+            ).unwrap();
+        }
+        stdout.flush().unwrap();
     }
 }
