@@ -1,1 +1,11 @@
-/target
+# Build artifacts
+/target/
+
+# JetBrains IDE settings
+/.idea/
+
+# VS Code settings
+/.vscode/
+
+# macOS filesystem metadata
+.DS_Store
