@@ -37,7 +37,7 @@ impl Particle {
         self.acceleration = acceleration;
     }
 
-    pub fn update(&mut self, console: &Console) -> &mut Self {
+    pub fn update(&mut self, console: &Console) {
         // self.velocity = self.velocity.add(&self.acceleration);
         self.velocity.add(&self.acceleration);
         self.position.add(&self.velocity);
@@ -59,6 +59,5 @@ impl Particle {
             self.position.x = self.position.x.abs();
             self.velocity.x = self.velocity.x * -1;
         }
-        self
     }
 }
