@@ -1,10 +1,26 @@
 use crate::console::Console;
-use crate::spatial::{Coordinate};
+use crate::spatial::Coordinate;
+use std::fmt::{Display, Formatter};
 
 pub struct Particle {
-    position: Coordinate, // In subpixel coordinates
-    velocity: Coordinate,     // In subpixel coordinates per frame
-    acceleration: Coordinate,
+    pub position: Coordinate, // In subpixel coordinates
+    pub velocity: Coordinate, // In subpixel coordinates per frame
+    pub acceleration: Coordinate,
+}
+
+impl Display for Particle {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Position: ({}, {}). Velocity: ({}, {}). Acceleration: ({}, {})",
+            self.position.x,
+            self.position.y,
+            self.velocity.x,
+            self.velocity.y,
+            self.acceleration.x,
+            self.acceleration.y
+        )
+    }
 }
 
 impl Particle {
@@ -19,19 +35,10 @@ impl Particle {
             acceleration: acceleration.unwrap_or_default(),
         }
     }
-    
+
     pub fn get_position(&self) -> Coordinate {
         self.position
     }
-
-    pub fn get_velocity(&self) -> Coordinate {
-        self.velocity
-    }
-
-    pub fn get_acceleration(&self) -> Coordinate {
-        self.acceleration
-    }
-
 
     pub fn set_acceleration(&mut self, acceleration: Coordinate) {
         self.acceleration = acceleration;

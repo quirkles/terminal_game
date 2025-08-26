@@ -1,11 +1,11 @@
-use crossterm::cursor::{Hide, MoveToColumn, MoveToRow};
+use crossterm::cursor::{Hide, MoveTo, MoveToColumn, MoveToRow};
 use crossterm::style::Print;
 use crossterm::{QueueableCommand};
 use std::io::{stdout, Write};
 use crossterm::terminal::{Clear, ClearType};
 use crate::border::BorderChars;
 use crate::particle::Particle;
-use crate::spatial::{ConsoleCell, SUBPIXEL_SCALE};
+use crate::spatial::{SUBPIXEL_SCALE};
 
 pub struct Console {
     pub(crate) cell_width: u16,
@@ -61,23 +61,18 @@ impl Console {
         self
     }
 
-    pub fn draw(&self, particles: &Vec<Particle>) {
+    pub fn draw_particle(&self, particle: &Particle) {
         let mut stdout = stdout();
 
         stdout.queue(Hide).unwrap();
 
-        let particle_coordinates: Vec<ConsoleCell> = particles
-            .iter()
-            .map(|particle| particle.get_position().to_cell())
-            .collect();
+        let particle_coordinate = particle.get_position().to_cell();
 
         for console_j in 1..self.cell_height - 1 {
             stdout.queue(MoveToRow(console_j)).unwrap();
             for console_i in 1..self.cell_width - 1 {
                 stdout.queue(MoveToColumn(console_i)).unwrap();
-                let is_particle_here = particle_coordinates
-                    .iter()
-                    .any(|cell| cell.x == console_i && cell.y == console_j);
+                let is_particle_here = particle_coordinate.x == console_i && particle_coordinate.y == console_j;
                 if is_particle_here {
                     stdout.write("•".as_bytes()).unwrap();
                 } else {
@@ -88,45 +83,38 @@ impl Console {
         }
 
         // Display velocity and acceleration information underneath the box
-        for (_, particle) in particles.iter().enumerate() {
-            let v = particle.get_velocity();
-            let acc = particle.get_acceleration();
-            let pos = particle.get_position();
-
-            let info_row = self.cell_height + 1;
-
-
-            stdout.queue(MoveToRow(info_row)).unwrap();
-            stdout.queue(MoveToColumn(1)).unwrap();
-            stdout.queue(
-                Print(
-                    format!(
-                        "x={}, y={}", pos.x, pos.y
-                    )
-                )
-            ).unwrap();
-
-            stdout.queue(MoveToRow(info_row + 1)).unwrap();
-            stdout.queue(MoveToColumn(1)).unwrap();
-            stdout.queue(
-                Print(
-                    format!(
-                        "vx={}, vy={}", v.x, v.y
-                    )
-                )
-            ).unwrap();
-            stdout.queue(MoveToRow(info_row + 1)).unwrap();
-
-            stdout.queue(MoveToRow(info_row + 2)).unwrap();
-            stdout.queue(MoveToColumn(1)).unwrap();
-            stdout.queue(
-                Print(
-                    format!(
-                        "ax={}, ay={}", acc.x, acc.y
-                    )
-                )
-            ).unwrap();
-        }
+        stdout.flush().unwrap();
+    }
+    
+    pub fn display_info(
+        &self,
+        particle: &Particle,
+        pressed_button_str: &str,
+    ) {
+        let mut stdout = stdout();
+        stdout.queue(Hide).unwrap();
+        stdout.queue(MoveTo(self.cell_width + 1, 0)).unwrap();
+        stdout.write("Information.".as_bytes()).unwrap();
+        stdout.queue(MoveTo(self.cell_width + 1, 2)).unwrap();
+        stdout.write(pressed_button_str.as_bytes()).unwrap();
+        stdout.queue(MoveTo(self.cell_width + 1, 4)).unwrap();
+        stdout.write(format!(
+            "P: {:04}i, {:04}j",
+            particle.position.y,
+            particle.position.x,
+        ).as_bytes()).unwrap();
+        stdout.queue(MoveTo(self.cell_width + 1, 5)).unwrap();
+        stdout.write(format!(
+            "V: {:04}i, {:04}j",
+            particle.velocity.y,
+            particle.velocity.x,
+        ).as_bytes()).unwrap();
+        stdout.queue(MoveTo(self.cell_width + 1, 6)).unwrap();
+        stdout.write(format!(
+            "A: {:04}i, {:04}j",
+            particle.acceleration.y,
+            particle.acceleration.x,
+        ).as_bytes()).unwrap();
         stdout.flush().unwrap();
     }
 }

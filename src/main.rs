@@ -6,13 +6,12 @@ mod spatial;
 use crate::console::Console;
 use crate::particle::Particle;
 use crate::spatial::{Coordinate, SUBPIXEL_SCALE};
-use crossterm::cursor::MoveTo;
 use crossterm::event::{
     Event, KeyCode, KeyEventKind, KeyboardEnhancementFlags, PopKeyboardEnhancementFlags,
     PushKeyboardEnhancementFlags, poll, read,
 };
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
-use crossterm::{QueueableCommand, execute};
+use crossterm::{execute};
 use std::io::{Write, stdout};
 use std::thread::sleep;
 use std::time::Duration;
@@ -26,17 +25,16 @@ fn main() {
         PushKeyboardEnhancementFlags(KeyboardEnhancementFlags::REPORT_EVENT_TYPES)
     )
     .expect("Failed to set keyboard enhancement flags");
+    let margin = 25;
     // detect the length of terminal
-    // let (term_w, term_h) = crossterm::terminal::size().unwrap();
-    let (term_w, term_h) = (45, 15);
-    let console = Console::new(term_w, term_h);
+    let (term_w, term_h) = crossterm::terminal::size().unwrap();
+    let console = Console::new(term_w - margin, term_h);
 
     // Init the map
     console.draw_borders();
 
-    // Init a vector of mutable particles
-    let mut particles: Vec<Particle> = Vec::new();
-    let particle = Particle::new(
+    // Init a single particle
+    let mut particle = Particle::new(
         Some(Coordinate::new(
             ((rand::random::<u16>() % (term_w - 2)) + 1) as i32 * SUBPIXEL_SCALE,
             ((rand::random::<u16>() % (term_h - 2)) + 1) as i32 * SUBPIXEL_SCALE,
@@ -44,7 +42,6 @@ fn main() {
         None,
         None,
     );
-    particles.push(particle);
 
     let mut interrupt_flag = false;
     // Listener for keydown on escape and exit
@@ -97,42 +94,64 @@ fn main() {
                 _ => (),
             }
         } else {
-            let mut pressed_str = String::from("____");
-            let mut d_a_y = 0;
-            if up_held | down_held {
-                if up_held {
-                    pressed_str.replace_range(0..1, "↑");
-                    d_a_y -= 1;
+            let mut pressed_str = String::from("");
+
+            // Handle vertical movement and acceleration
+            let d_a_y = match (up_held, down_held) {
+                (true, false) => {
+                    pressed_str.push_str("↑  ");
+                    -1
                 }
-                if down_held {
-                    pressed_str.replace_range(1..2, "↓");
-                    d_a_y += 1;
+                (false, true) => {
+                    pressed_str.push_str( "  ↓");
+                    1
                 }
+                (true, true) => {
+                    pressed_str.push_str("↑ ↓");
+                    0 // Both pressed, cancel out
+                }
+                (false, false) => {
+                    pressed_str.push_str("   ");
+                    0
+                }
+            };
+
+            // Handle horizontal movement and acceleration
+            let d_a_x = match (left_held, right_held) {
+                (true, false) => {
+                    pressed_str.push_str(" ←  ");
+                    -1
+                }
+                (false, true) => {
+                    pressed_str.push_str("  → ");
+                    1
+                }
+                (true, true) => {
+                    pressed_str.push_str(" ← →");
+                    0 // Both pressed, cancel out
+                }
+                (false, false) => {
+                    pressed_str.push_str("   ");
+                    0
+                }
+            };
+
+            // Update accelerations
+            if d_a_y != 0 {
                 acc_y += d_a_y;
             } else {
-                acc_y = 0
+                acc_y = 0;
             }
-            let mut d_a_x = 0;
-            if left_held | right_held {
-                if left_held {
-                    pressed_str.replace_range(2..3, "←");
-                    d_a_x -= 1;
-                }
-                if right_held {
-                    pressed_str.replace_range(3..4, "→");
-                    d_a_x += 1;
-                }
+
+            if d_a_x != 0 {
                 acc_x += d_a_x;
             } else {
                 acc_x = 0;
             }
-            particles.iter_mut().for_each(|particle| {
-                particle.set_acceleration(Coordinate::new(acc_x, acc_y));
-                particle.update(&console)
-            });
-            console.draw(&particles);
-            stdout.queue(MoveTo(2, term_h + 5)).unwrap();
-            stdout.write(pressed_str.as_bytes()).unwrap();
+            particle.set_acceleration(Coordinate::new(acc_x, acc_y));
+            particle.update(&console);
+            console.draw_particle(&particle);
+            console.display_info(&particle, &pressed_str);
             stdout.flush().unwrap();
             sleep(Duration::from_millis(100));
         }
