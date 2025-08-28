@@ -59,7 +59,7 @@ fn main() {
     let mut right_held = false;
 
     while !interrupt_flag {
-        if poll(Duration::from_millis(50)).unwrap() {
+        if poll(Duration::from_millis(25)).unwrap() {
             match read().unwrap() {
                 Event::Key(event) => match event.code {
                     KeyCode::Char('q') => {
@@ -152,13 +152,13 @@ fn main() {
             } else {
                 acc_x = 0;
             }
-            particle.set_acceleration(Coordinate::new(acc_x, acc_y));
+            particle.set_acceleration(Coordinate::new(acc_x / 2, acc_y / 2));
             particle.update(&console, velocity_cap);
             let scene = Scene::new(vec![particle]);
             console.draw_scene(&scene);
             console.display_info(&particle, &pressed_str);
             stdout.flush().unwrap();
-            sleep(Duration::from_millis(100));
+            sleep(Duration::from_millis(50));
         }
     }
     disable_raw_mode().expect("Failed to disable raw mode");

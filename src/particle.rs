@@ -53,7 +53,8 @@ impl Particle {
         self.velocity.x = self.velocity.x.clamp(-velocity_cap.x, velocity_cap.x);
         self.velocity.y = self.velocity.y.clamp(-velocity_cap.y, velocity_cap.y);
 
-        self.position.add(&self.velocity);
+        // Apply half the velocity per tick for smoother motion at doubled tick rate
+        self.position.add(&Coordinate::new(self.velocity.x / 2, self.velocity.y / 2));
 
         let as_cell = self.position.to_cell();
         if as_cell.y >= console.cell_height - 1 {
