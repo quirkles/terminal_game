@@ -2,6 +2,7 @@ use crate::console::Console;
 use crate::spatial::Coordinate;
 use std::fmt::{Display, Formatter};
 
+#[derive(Copy, Clone)]
 pub struct Particle {
     pub position: Coordinate, // In subpixel coordinates
     pub velocity: Coordinate, // In subpixel coordinates per frame
@@ -44,9 +45,14 @@ impl Particle {
         self.acceleration = acceleration;
     }
 
-    pub fn update(&mut self, console: &Console) {
+    pub fn update(&mut self, console: &Console, velocity_cap: Coordinate) {
         // self.velocity = self.velocity.add(&self.acceleration);
         self.velocity.add(&self.acceleration);
+
+        // Clamp velocity to the provided cap per axis
+        self.velocity.x = self.velocity.x.clamp(-velocity_cap.x, velocity_cap.x);
+        self.velocity.y = self.velocity.y.clamp(-velocity_cap.y, velocity_cap.y);
+
         self.position.add(&self.velocity);
 
         let as_cell = self.position.to_cell();

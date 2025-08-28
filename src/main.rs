@@ -2,16 +2,18 @@ mod border;
 mod console;
 mod particle;
 mod spatial;
+mod scene;
 
 use crate::console::Console;
 use crate::particle::Particle;
+use crate::scene::Scene;
 use crate::spatial::{Coordinate, SUBPIXEL_SCALE};
 use crossterm::event::{
     Event, KeyCode, KeyEventKind, KeyboardEnhancementFlags, PopKeyboardEnhancementFlags,
     PushKeyboardEnhancementFlags, poll, read,
 };
+use crossterm::execute;
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
-use crossterm::{execute};
 use std::io::{Write, stdout};
 use std::thread::sleep;
 use std::time::Duration;
@@ -28,7 +30,7 @@ fn main() {
     let margin = 25;
     // detect the length of terminal
     let (term_w, term_h) = crossterm::terminal::size().unwrap();
-    let console = Console::new(term_w - margin, term_h);
+    let mut console = Console::new(term_w - margin, term_h);
 
     // Init the map
     console.draw_borders();
@@ -42,6 +44,8 @@ fn main() {
         None,
         None,
     );
+
+    let velocity_cap = Coordinate::new(200, 200);
 
     let mut interrupt_flag = false;
     // Listener for keydown on escape and exit
@@ -103,7 +107,7 @@ fn main() {
                     -1
                 }
                 (false, true) => {
-                    pressed_str.push_str( "  ↓");
+                    pressed_str.push_str("  ↓");
                     1
                 }
                 (true, true) => {
@@ -149,8 +153,9 @@ fn main() {
                 acc_x = 0;
             }
             particle.set_acceleration(Coordinate::new(acc_x, acc_y));
-            particle.update(&console);
-            console.draw_particle(&particle);
+            particle.update(&console, velocity_cap);
+            let scene = Scene::new(vec![particle]);
+            console.draw_scene(&scene);
             console.display_info(&particle, &pressed_str);
             stdout.flush().unwrap();
             sleep(Duration::from_millis(100));

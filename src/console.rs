@@ -1,10 +1,10 @@
 use crossterm::cursor::{Hide, MoveTo, MoveToColumn, MoveToRow};
-use crossterm::style::Print;
 use crossterm::{QueueableCommand};
 use std::io::{stdout, Write};
 use crossterm::terminal::{Clear, ClearType};
 use crate::border::BorderChars;
 use crate::particle::Particle;
+use crate::scene::Scene;
 use crate::spatial::{SUBPIXEL_SCALE};
 
 pub struct Console {
@@ -12,6 +12,7 @@ pub struct Console {
     pub(crate) cell_height: u16,
     pub(crate) height: i32,
     pub(crate) width: i32,
+    previous_scene: Option<Scene>,
 }
 
 impl Console {
@@ -21,6 +22,7 @@ impl Console {
             cell_height,
             width: cell_width as i32 * SUBPIXEL_SCALE,
             height: cell_height as i32 * SUBPIXEL_SCALE,
+            previous_scene: None,
         }
     }
 
@@ -61,29 +63,33 @@ impl Console {
         self
     }
 
-    pub fn draw_particle(&self, particle: &Particle) {
+    pub fn draw_scene(&mut self, scene: &Scene) {
         let mut stdout = stdout();
-
         stdout.queue(Hide).unwrap();
 
-        let particle_coordinate = particle.get_position().to_cell();
-
-        for console_j in 1..self.cell_height - 1 {
-            stdout.queue(MoveToRow(console_j)).unwrap();
-            for console_i in 1..self.cell_width - 1 {
-                stdout.queue(MoveToColumn(console_i)).unwrap();
-                let is_particle_here = particle_coordinate.x == console_i && particle_coordinate.y == console_j;
-                if is_particle_here {
-                    stdout.write("•".as_bytes()).unwrap();
-                } else {
+        // 1) Erase previously drawn cells by overwriting them with spaces
+        if let Some(prev) = &self.previous_scene {
+            for (cell, _ch) in prev.render_cells() {
+                if cell.x >= 1 && cell.x < self.cell_width - 1 && cell.y >= 1 && cell.y < self.cell_height - 1 {
+                    stdout.queue(MoveTo(cell.x, cell.y)).unwrap();
                     stdout.write(" ".as_bytes()).unwrap();
                 }
-                stdout.flush().unwrap();
             }
         }
 
-        // Display velocity and acceleration information underneath the box
+        // 2) Draw current scene cells
+        for (cell, ch) in scene.render_cells() {
+            if cell.x >= 1 && cell.x < self.cell_width - 1 && cell.y >= 1 && cell.y < self.cell_height - 1 {
+                stdout.queue(MoveTo(cell.x, cell.y)).unwrap();
+                let s = ch.to_string();
+                stdout.write(s.as_bytes()).unwrap();
+            }
+        }
+
         stdout.flush().unwrap();
+
+        // 3) Store current scene as previous for the next frame
+        self.previous_scene = Some(scene.clone());
     }
     
     pub fn display_info(
