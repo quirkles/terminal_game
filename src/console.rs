@@ -116,6 +116,7 @@ impl Console {
         stdout.queue(MoveTo(self.cell_width + 1, 0)).unwrap();
         stdout.write("Information.".as_bytes()).unwrap();
         stdout.queue(MoveTo(self.cell_width + 1, 2)).unwrap();
+        stdout.queue(Clear(ClearType::UntilNewLine)).unwrap();
         stdout.write(pressed_button_str.as_bytes()).unwrap();
         stdout.queue(MoveTo(self.cell_width + 1, 4)).unwrap();
         stdout

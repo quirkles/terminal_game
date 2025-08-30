@@ -158,6 +158,7 @@ fn main() {
 
             cycle_phase = (cycle_phase + 1) % 16;
             if braking_held {
+                pressed_str = String::from("Braking");
                 acc_x = 0;
                 acc_y = 0;
                 let braking = braking_acceleration_from_velocity(particle.velocity);
