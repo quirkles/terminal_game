@@ -1,11 +1,11 @@
-use crossterm::cursor::{Hide, MoveTo, MoveToColumn, MoveToRow};
-use crossterm::{QueueableCommand};
-use std::io::{stdout, Write};
-use crossterm::terminal::{Clear, ClearType};
 use crate::border::BorderChars;
 use crate::particle::Particle;
 use crate::scene::Scene;
-use crate::spatial::{SUBPIXEL_SCALE};
+use crate::spatial::SUBPIXEL_SCALE;
+use crossterm::QueueableCommand;
+use crossterm::cursor::{Hide, MoveTo, MoveToColumn, MoveToRow};
+use crossterm::terminal::{Clear, ClearType};
+use std::io::{Write, stdout};
 
 pub struct Console {
     pub(crate) cell_width: u16,
@@ -39,7 +39,9 @@ impl Console {
             (false, true, true, false) => Some(BorderChars::BottomLeft),
             (false, true, false, true) => Some(BorderChars::BottomRight),
             (false, true, false, false) => Some(BorderChars::Horizontal),
-            (false, false, true, false) | (false, false, false, true) => Some(BorderChars::Vertical),
+            (false, false, true, false) | (false, false, false, true) => {
+                Some(BorderChars::Vertical)
+            }
             _ => None,
         }
     }
@@ -54,7 +56,9 @@ impl Console {
             for console_i in 0..self.cell_width {
                 stdout.queue(MoveToColumn(console_i)).unwrap();
 
-                if let Some(border_char) = Self::get_border_char(console_j, console_i, self.cell_height, self.cell_width) {
+                if let Some(border_char) =
+                    Self::get_border_char(console_j, console_i, self.cell_height, self.cell_width)
+                {
                     stdout.write(border_char.to_string().as_bytes()).unwrap();
                 }
             }
@@ -70,7 +74,11 @@ impl Console {
         // 1) Erase previously drawn cells by overwriting them with spaces
         if let Some(prev) = &self.previous_scene {
             for (cell, _ch) in prev.render_cells() {
-                if cell.x >= 1 && cell.x < self.cell_width - 1 && cell.y >= 1 && cell.y < self.cell_height - 1 {
+                if cell.x >= 1
+                    && cell.x < self.cell_width - 1
+                    && cell.y >= 1
+                    && cell.y < self.cell_height - 1
+                {
                     stdout.queue(MoveTo(cell.x, cell.y)).unwrap();
                     stdout.write(" ".as_bytes()).unwrap();
                 }
@@ -79,7 +87,11 @@ impl Console {
 
         // 2) Draw current scene cells
         for (cell, ch) in scene.render_cells() {
-            if cell.x >= 1 && cell.x < self.cell_width - 1 && cell.y >= 1 && cell.y < self.cell_height - 1 {
+            if cell.x >= 1
+                && cell.x < self.cell_width - 1
+                && cell.y >= 1
+                && cell.y < self.cell_height - 1
+            {
                 stdout.queue(MoveTo(cell.x, cell.y)).unwrap();
                 let s = ch.to_string();
                 stdout.write(s.as_bytes()).unwrap();
@@ -91,12 +103,8 @@ impl Console {
         // 3) Store current scene as previous for the next frame
         self.previous_scene = Some(scene.clone());
     }
-    
-    pub fn display_info(
-        &self,
-        particle: &Particle,
-        pressed_button_str: &str,
-    ) {
+
+    pub fn display_info(&self, particle: &Particle, pressed_button_str: &str) {
         let mut stdout = stdout();
         stdout.queue(Hide).unwrap();
         stdout.queue(MoveTo(self.cell_width + 1, 0)).unwrap();
@@ -104,23 +112,35 @@ impl Console {
         stdout.queue(MoveTo(self.cell_width + 1, 2)).unwrap();
         stdout.write(pressed_button_str.as_bytes()).unwrap();
         stdout.queue(MoveTo(self.cell_width + 1, 4)).unwrap();
-        stdout.write(format!(
-            "P: {:04}i, {:04}j",
-            particle.position.y,
-            particle.position.x,
-        ).as_bytes()).unwrap();
+        stdout
+            .write(
+                format!(
+                    "P: {:04}i, {:04}j",
+                    particle.position.y, particle.position.x,
+                )
+                .as_bytes(),
+            )
+            .unwrap();
         stdout.queue(MoveTo(self.cell_width + 1, 5)).unwrap();
-        stdout.write(format!(
-            "V: {:04}i, {:04}j",
-            particle.velocity.y,
-            particle.velocity.x,
-        ).as_bytes()).unwrap();
+        stdout
+            .write(
+                format!(
+                    "V: {:04}i, {:04}j",
+                    particle.velocity.y, particle.velocity.x,
+                )
+                .as_bytes(),
+            )
+            .unwrap();
         stdout.queue(MoveTo(self.cell_width + 1, 6)).unwrap();
-        stdout.write(format!(
-            "A: {:04}i, {:04}j",
-            particle.acceleration.y,
-            particle.acceleration.x,
-        ).as_bytes()).unwrap();
+        stdout
+            .write(
+                format!(
+                    "A: {:04}i, {:04}j",
+                    particle.acceleration.y, particle.acceleration.x,
+                )
+                .as_bytes(),
+            )
+            .unwrap();
         stdout.flush().unwrap();
     }
 }

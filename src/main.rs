@@ -7,7 +7,7 @@ mod scene;
 use crate::console::Console;
 use crate::particle::Particle;
 use crate::scene::Scene;
-use crate::spatial::{Coordinate, SUBPIXEL_SCALE};
+use crate::spatial::{Coordinate, SUBPIXEL_SCALE, braking_acceleration_from_velocity};
 use crossterm::event::{
     Event, KeyCode, KeyEventKind, KeyboardEnhancementFlags, PopKeyboardEnhancementFlags,
     PushKeyboardEnhancementFlags, poll, read,
@@ -15,7 +15,6 @@ use crossterm::event::{
 use crossterm::execute;
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
 use std::io::{Write, stdout};
-use std::thread::sleep;
 use std::time::Duration;
 
 fn main() {
@@ -57,6 +56,9 @@ fn main() {
     let mut down_held = false;
     let mut left_held = false;
     let mut right_held = false;
+    let mut braking_held = false;
+
+    let mut cycle_phase: u8 = 0; // 0..=15
 
     while !interrupt_flag {
         if poll(Duration::from_millis(25)).unwrap() {
@@ -64,6 +66,13 @@ fn main() {
                 Event::Key(event) => match event.code {
                     KeyCode::Char('q') => {
                         interrupt_flag = true;
+                    }
+                    KeyCode::Char('b') => {
+                        if event.kind == KeyEventKind::Press {
+                            braking_held = true;
+                        } else if event.kind == KeyEventKind::Release {
+                            braking_held = false;
+                        }
                     }
                     KeyCode::Up => {
                         if event.kind == KeyEventKind::Press {
@@ -140,25 +149,34 @@ fn main() {
                 }
             };
 
-            // Update accelerations
-            if d_a_y != 0 {
-                acc_y += d_a_y;
-            } else {
-                acc_y = 0;
-            }
-
-            if d_a_x != 0 {
-                acc_x += d_a_x;
-            } else {
+            cycle_phase = (cycle_phase + 1) % 16;
+            if braking_held {
                 acc_x = 0;
+                acc_y = 0;
+                let braking = braking_acceleration_from_velocity(particle.velocity);
+                particle.set_acceleration(braking);
+            } else if cycle_phase % 4 == 0 {
+                // Update accelerations (throttled to every 8th tick in a 0-15 phase cycle)
+                if d_a_y != 0 {
+                    acc_y += d_a_y;
+                } else {
+                    acc_y = 0;
+                }
+
+                if d_a_x != 0 {
+                    acc_x += d_a_x;
+                } else {
+                    acc_x = 0;
+                }
+
+                particle.set_acceleration(Coordinate::new(acc_x, acc_y));
             }
-            particle.set_acceleration(Coordinate::new(acc_x / 2, acc_y / 2));
             particle.update(&console, velocity_cap);
+
             let scene = Scene::new(vec![particle]);
             console.draw_scene(&scene);
             console.display_info(&particle, &pressed_str);
             stdout.flush().unwrap();
-            sleep(Duration::from_millis(50));
         }
     }
     disable_raw_mode().expect("Failed to disable raw mode");
