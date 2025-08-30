@@ -6,6 +6,10 @@ use crossterm::QueueableCommand;
 use crossterm::cursor::{Hide, MoveTo, MoveToColumn, MoveToRow};
 use crossterm::terminal::{Clear, ClearType};
 use std::io::{Write, stdout};
+use crossterm::style::{Color, SetForegroundColor};
+
+pub const DEFAULT_FOREGROUND_COLOR: Color = Color::White;
+pub const DEFAULT_BACKGROUND_COLOR: Color = Color::Black;
 
 pub struct Console {
     pub(crate) cell_width: u16,
@@ -73,7 +77,7 @@ impl Console {
 
         // 1) Erase previously drawn cells by overwriting them with spaces
         if let Some(prev) = &self.previous_scene {
-            for (cell, _ch) in prev.render_cells() {
+            for (cell, _ch, _color) in prev.get_renderable() {
                 if cell.x >= 1
                     && cell.x < self.cell_width - 1
                     && cell.y >= 1
@@ -86,15 +90,17 @@ impl Console {
         }
 
         // 2) Draw current scene cells
-        for (cell, ch) in scene.render_cells() {
+        for (cell, ch, color) in scene.get_renderable() {
             if cell.x >= 1
                 && cell.x < self.cell_width - 1
                 && cell.y >= 1
                 && cell.y < self.cell_height - 1
             {
                 stdout.queue(MoveTo(cell.x, cell.y)).unwrap();
+                stdout.queue(SetForegroundColor(color)).unwrap();
                 let s = ch.to_string();
                 stdout.write(s.as_bytes()).unwrap();
+                stdout.queue(SetForegroundColor(DEFAULT_FOREGROUND_COLOR)).unwrap();
             }
         }
 

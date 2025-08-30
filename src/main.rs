@@ -4,7 +4,7 @@ mod particle;
 mod spatial;
 mod scene;
 
-use crate::console::Console;
+use crate::console::{Console, DEFAULT_BACKGROUND_COLOR, DEFAULT_FOREGROUND_COLOR};
 use crate::particle::Particle;
 use crate::scene::Scene;
 use crate::spatial::{Coordinate, SUBPIXEL_SCALE, braking_acceleration_from_velocity};
@@ -16,6 +16,7 @@ use crossterm::execute;
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
 use std::io::{Write, stdout};
 use std::time::Duration;
+use crossterm::style::{Color, Colors, SetColors};
 
 fn main() {
     let mut stdout = stdout();
@@ -23,7 +24,11 @@ fn main() {
     execute!(
         stdout,
         PushKeyboardEnhancementFlags(KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES,),
-        PushKeyboardEnhancementFlags(KeyboardEnhancementFlags::REPORT_EVENT_TYPES)
+        PushKeyboardEnhancementFlags(KeyboardEnhancementFlags::REPORT_EVENT_TYPES),
+        SetColors(Colors::new(
+            DEFAULT_FOREGROUND_COLOR,
+            DEFAULT_BACKGROUND_COLOR
+        ))
     )
     .expect("Failed to set keyboard enhancement flags");
     let margin = 25;
@@ -43,6 +48,8 @@ fn main() {
         None,
         None,
     );
+
+    particle.set_color(Color::Red);
 
     let velocity_cap = Coordinate::new(200, 200);
 
