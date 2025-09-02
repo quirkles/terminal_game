@@ -181,8 +181,9 @@ fn main() {
             }
             particle.update(&console, velocity_cap);
 
-            let scene = Scene::new(vec![particle]);
-            console.draw_scene(&scene);
+            console.draw_scene(
+                Scene::new(vec![particle])
+            );
             console.display_info(&particle, &pressed_str);
             stdout.flush().unwrap();
         }

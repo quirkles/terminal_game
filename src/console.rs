@@ -71,7 +71,7 @@ impl Console {
         self
     }
 
-    pub fn draw_scene(&mut self, scene: &Scene) {
+    pub fn draw_scene(&mut self, scene: Scene) {
         let mut stdout = stdout();
         stdout.queue(Hide).unwrap();
 
@@ -106,8 +106,8 @@ impl Console {
 
         stdout.flush().unwrap();
 
-        // 3) Store current scene as previous for the next frame
-        self.previous_scene = Some(scene.clone());
+        // 3) Store the current scene as previous for the next frame
+        self.previous_scene = Some(scene);
     }
 
     pub fn display_info(&self, particle: &Particle, pressed_button_str: &str) {

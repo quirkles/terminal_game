@@ -2,7 +2,6 @@ use crossterm::style::Color;
 use crate::particle::{Particle};
 use crate::spatial::ConsoleCell;
 
-#[derive(Clone)]
 pub struct Scene {
     pub particles: Vec<Particle>,
 }

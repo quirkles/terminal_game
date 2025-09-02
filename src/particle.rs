@@ -3,12 +3,18 @@ use crate::spatial::Coordinate;
 use crossterm::style::Color;
 use std::fmt::{Display, Formatter};
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum ParticleType {
+    Rocket,
+}
+
 #[derive(Copy, Clone)]
 pub struct Particle {
     pub position: Coordinate, // In subpixel coordinates
     pub velocity: Coordinate, // In subpixel coordinates per frame
     pub acceleration: Coordinate,
     pub color: Color,
+    pub kind: ParticleType,
 }
 
 impl Display for Particle {
@@ -37,6 +43,7 @@ impl Particle {
             velocity: velocity.unwrap_or_default(),
             acceleration: acceleration.unwrap_or_default(),
             color: Color::White,
+            kind: ParticleType::Rocket,
         }
     }
 
@@ -84,6 +91,12 @@ impl Particle {
     }
 
     pub fn get_particle_char(&self) -> char {
+        match self.kind {
+            ParticleType::Rocket => self.get_rocket_char(),
+        }
+    }
+
+    fn get_rocket_char(&self) -> char {
         let vx = self.velocity.x as f32;
         let vy = self.velocity.y as f32;
 
