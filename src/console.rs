@@ -113,37 +113,61 @@ impl Console {
     pub fn display_info(&self, particle: &Particle, pressed_button_str: &str) {
         let mut stdout = stdout();
         stdout.queue(Hide).unwrap();
-        stdout.queue(MoveTo(self.cell_width + 1, 0)).unwrap();
-        stdout.write("Information.".as_bytes()).unwrap();
-        stdout.queue(MoveTo(self.cell_width + 1, 2)).unwrap();
-        stdout.queue(Clear(ClearType::UntilNewLine)).unwrap();
-        stdout.write(pressed_button_str.as_bytes()).unwrap();
-        stdout.queue(MoveTo(self.cell_width + 1, 4)).unwrap();
-        stdout
-            .write(
-                format!(
-                    "P: {:04}i, {:04}j",
-                    particle.position.y, particle.position.x,
+            // Header
+            stdout.queue(MoveTo(self.cell_width + 1, 0)).unwrap();
+            stdout.write("Information.".as_bytes()).unwrap();
+
+            // Fuel bar: occupies exactly 32 characters in the margin
+            let margin_width: usize = 32;
+            let filled = (particle.fuel as usize * margin_width) / 255;
+            let bar = format!("{}{}", "#".repeat(filled), " ".repeat(margin_width - filled));
+            stdout.queue(MoveTo(self.cell_width + 1, 1)).unwrap();
+            stdout.queue(Clear(ClearType::UntilNewLine)).unwrap();
+            stdout.write(bar.as_bytes()).unwrap();
+
+            // Pressed keys
+            stdout.queue(MoveTo(self.cell_width + 1, 2)).unwrap();
+            stdout.queue(Clear(ClearType::UntilNewLine)).unwrap();
+            stdout.write(pressed_button_str.as_bytes()).unwrap();
+
+            // Position / Velocity / Acceleration readouts
+            stdout.queue(MoveTo(self.cell_width + 1, 4)).unwrap();
+            stdout
+                .write(
+                    format!(
+                        "P: {:04}i, {:04}j",
+                        particle.position.y, particle.position.x,
+                    )
+                    .as_bytes(),
                 )
-                .as_bytes(),
-            )
-            .unwrap();
-        stdout.queue(MoveTo(self.cell_width + 1, 5)).unwrap();
-        stdout
-            .write(
-                format!(
-                    "V: {:04}i, {:04}j",
-                    particle.velocity.y, particle.velocity.x,
+                .unwrap();
+            stdout.queue(MoveTo(self.cell_width + 1, 5)).unwrap();
+            stdout
+                .write(
+                    format!(
+                        "V: {:04}i, {:04}j",
+                        particle.velocity.y, particle.velocity.x,
+                    )
+                    .as_bytes(),
                 )
-                .as_bytes(),
-            )
-            .unwrap();
-        stdout.queue(MoveTo(self.cell_width + 1, 6)).unwrap();
+                .unwrap();
+            stdout.queue(MoveTo(self.cell_width + 1, 6)).unwrap();
+            stdout
+                .write(
+                    format!(
+                        "A: {:04}i, {:04}j",
+                        particle.acceleration.y, particle.acceleration.x,
+                    )
+                    .as_bytes(),
+                )
+                .unwrap();
+
+        stdout.queue(MoveTo(self.cell_width + 1, 7)).unwrap();
         stdout
             .write(
                 format!(
-                    "A: {:04}i, {:04}j",
-                    particle.acceleration.y, particle.acceleration.x,
+                    "F: {:03}",
+                    particle.fuel,
                 )
                 .as_bytes(),
             )

@@ -1,20 +1,30 @@
 use crate::console::Console;
 use crate::spatial::Coordinate;
 use crossterm::style::Color;
+use std::cmp::max;
 use std::fmt::{Display, Formatter};
+use std::ops::{AddAssign};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum ParticleType {
     Rocket,
 }
 
+#[derive(Copy, Clone, Debug)]
+pub enum Boost {
+    Brake,
+    Coordinate(Coordinate),
+}
+
 #[derive(Copy, Clone)]
 pub struct Particle {
-    pub position: Coordinate, // In subpixel coordinates
-    pub velocity: Coordinate, // In subpixel coordinates per frame
+    pub position: Coordinate,   // In subpixel coordinates
+    pub velocity: Coordinate,   // In subpixel coordinates per frame
     pub acceleration: Coordinate,
     pub color: Color,
     pub kind: ParticleType,
+    pub fuel: u16,               // Remaining fuel units (0..=255)
+    pub velocity_cap: Coordinate,
 }
 
 impl Display for Particle {
@@ -32,11 +42,19 @@ impl Display for Particle {
     }
 }
 
+impl AddAssign for Coordinate {
+    fn add_assign(&mut self, other: Self) {
+        self.x += other.x;
+        self.y += other.y;
+    }
+}
+
 impl Particle {
     pub fn new(
         position: Option<Coordinate>,
         velocity: Option<Coordinate>,
         acceleration: Option<Coordinate>,
+        velocity_cap: Coordinate,
     ) -> Self {
         Self {
             position: position.unwrap_or_default(),
@@ -44,6 +62,8 @@ impl Particle {
             acceleration: acceleration.unwrap_or_default(),
             color: Color::White,
             kind: ParticleType::Rocket,
+            fuel: 255,
+            velocity_cap,
         }
     }
 
@@ -51,26 +71,47 @@ impl Particle {
         self.position
     }
 
-    pub fn set_acceleration(&mut self, acceleration: Coordinate) {
-        self.acceleration = acceleration;
-    }
-
     pub fn set_color(&mut self, color: Color) {
         self.color = color;
     }
 
-    pub fn update(&mut self, console: &Console, velocity_cap: Coordinate) {
-        // self.velocity = self.velocity.add(&self.acceleration);
-        self.velocity.add(&self.acceleration);
+    pub fn update(&mut self, console: &Console, boost: Option<Boost>) {
+        // 1) Handle boost: apply as first step, or reset to 0,0 if none.
+        //    If out of fuel, ignore any boost (treated as None).
+        if self.fuel == 0 {
+            self.acceleration = Coordinate::new(0, 0);
+        } else {
+            match boost {
+                Some(Boost::Brake) => {
+                    // Apply braking acceleration based on current velocity
+                    self.acceleration = self.braking_acceleration_from_velocity();
+                }
+                Some(Boost::Coordinate(delta)) => {
+                    // Apply provided acceleration vector for this frame
+                    self.acceleration += Coordinate::new(delta.x, delta.y);
+                }
+                None => {
+                    // No boost provided: reset acceleration
+                    self.acceleration = Coordinate::new(0, 0);
+                }
+            }
+        }
 
-        // Clamp velocity to the provided cap per axis
-        self.velocity.x = self.velocity.x.clamp(-velocity_cap.x, velocity_cap.x);
-        self.velocity.y = self.velocity.y.clamp(-velocity_cap.y, velocity_cap.y);
+        // 2) Consume fuel (once per frame when accelerating) and apply acceleration to velocity
+        if self.acceleration.x != 0 || self.acceleration.y != 0 {
+            self.fuel = self.fuel.saturating_sub(1);
+        }
+        self.velocity += self.acceleration;
 
-        // Apply half the velocity per tick for smoother motion at doubled tick rate
+        // 3) Clamp velocity to the cap per axis
+        self.velocity.x = self.velocity.x.clamp(-self.velocity_cap.x, self.velocity_cap.x);
+        self.velocity.y = self.velocity.y.clamp(-self.velocity_cap.y, self.velocity_cap.y);
+
+        // 4) Integrate position with half-velocity for smoother motion
         self.position
             .add(&Coordinate::new(self.velocity.x / 2, self.velocity.y / 2));
 
+        // 5) Bounce off borders
         let as_cell = self.position.to_cell();
         if as_cell.y >= console.cell_height - 1 {
             self.position.y = console.height - (self.position.y - console.height).abs();
@@ -104,7 +145,7 @@ impl Particle {
             return '•';
         }
 
-        // Angle from -PI..PI, convert to 0..2PI and quantize to 8 sectors
+        // Angle from - PI..PI, convert to 0..2PI and quantize to 8 sectors
         let mut ang = vy.atan2(vx);
         if ang < 0.0 {
             ang += std::f32::consts::PI * 2.0;
@@ -124,5 +165,58 @@ impl Particle {
             6 => '↑', // North
             _ => '↗', // North-East
         }
+    }
+}
+
+impl Particle {
+    // Compute braking acceleration from the current velocity (private helper).
+    // Rules:
+    // - Scale each velocity component's magnitude by 1/10 and floor the result;
+    //   acceleration opposes the velocity direction.
+    // - If both |vx| and |vy| are <= 10, apply unit acceleration (1) opposite to the
+    //   component with the greater magnitude; if equal and non-zero, apply to both.
+    // - Never overshoot: cap each axis so acceleration never exceeds -velocity on that axis.
+    fn braking_acceleration_from_velocity(&self) -> Coordinate {
+        let vx = self.velocity.x;
+        let vy = self.velocity.y;
+
+        if vx == 0 && vy == 0 {
+            return Coordinate::new(0, 0);
+        }
+
+        let absx = vx.abs();
+        let absy = vy.abs();
+
+        let mut ax: i32;
+        let mut ay: i32;
+
+        if absx <= 10 && absy <= 10 {
+            if absx > absy {
+                ax = -vx.signum();
+                ay = 0;
+            } else if absy > absx {
+                ax = 0;
+                ay = -vy.signum();
+            } else {
+                ax = -vx.signum();
+                ay = -vy.signum();
+            }
+        } else {
+            ax = max(-(absx / 20) * vx.signum(), 1);
+            ay = max(-(absy / 20) * vy.signum(), 1);
+        }
+
+        ax = match vx.cmp(&0) {
+            std::cmp::Ordering::Greater => ax.clamp(-vx, 0),
+            std::cmp::Ordering::Less => ax.clamp(0, -vx),
+            std::cmp::Ordering::Equal => 0,
+        };
+        ay = match vy.cmp(&0) {
+            std::cmp::Ordering::Greater => ay.clamp(-vy, 0),
+            std::cmp::Ordering::Less => ay.clamp(0, -vy),
+            std::cmp::Ordering::Equal => 0,
+        };
+
+        Coordinate::new(ax, ay)
     }
 }
