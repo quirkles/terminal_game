@@ -6,7 +6,8 @@ use crossterm::QueueableCommand;
 use crossterm::cursor::{Hide, MoveTo, MoveToColumn, MoveToRow};
 use crossterm::terminal::{Clear, ClearType};
 use std::io::{Write, stdout};
-use crossterm::style::{Color, SetForegroundColor};
+use crossterm::style::{Color, SetBackgroundColor, SetForegroundColor};
+use crossterm::style::{Colors, SetColors};
 
 pub const DEFAULT_FOREGROUND_COLOR: Color = Color::White;
 pub const DEFAULT_BACKGROUND_COLOR: Color = Color::Black;
@@ -77,30 +78,36 @@ impl Console {
 
         // 1) Erase previously drawn cells by overwriting them with spaces
         if let Some(prev) = &self.previous_scene {
-            for (cell, _ch, _color) in prev.get_renderable() {
+            for (cell, _ch, _color) in prev.get_renderable().particles {
                 if cell.x >= 1
                     && cell.x < self.cell_width - 1
                     && cell.y >= 1
                     && cell.y < self.cell_height - 1
                 {
                     stdout.queue(MoveTo(cell.x, cell.y)).unwrap();
+                    stdout.queue(SetColors(Colors::new(
+                        DEFAULT_FOREGROUND_COLOR,
+                        DEFAULT_BACKGROUND_COLOR,
+                    ))).unwrap();
                     stdout.write(" ".as_bytes()).unwrap();
                 }
             }
         }
 
         // 2) Draw current scene cells
-        for (cell, ch, color) in scene.get_renderable() {
+        for (cell, ch, color) in scene.get_renderable().particles {
             if cell.x >= 1
                 && cell.x < self.cell_width - 1
                 && cell.y >= 1
                 && cell.y < self.cell_height - 1
             {
                 stdout.queue(MoveTo(cell.x, cell.y)).unwrap();
-                stdout.queue(SetForegroundColor(color)).unwrap();
+                stdout.queue(SetForegroundColor(color.foreground)).unwrap();
+                stdout.queue(SetBackgroundColor(color.background)).unwrap();
                 let s = ch.to_string();
                 stdout.write(s.as_bytes()).unwrap();
                 stdout.queue(SetForegroundColor(DEFAULT_FOREGROUND_COLOR)).unwrap();
+                stdout.queue(SetBackgroundColor(DEFAULT_BACKGROUND_COLOR)).unwrap();
             }
         }
 
@@ -119,7 +126,7 @@ impl Console {
 
             // Fuel bar: occupies exactly 32 characters in the margin
             let margin_width: usize = 32;
-            let filled = (particle.fuel as usize * margin_width) / 255;
+            let filled = (particle.fuel as usize * margin_width) / 510;
             let bar = format!("{}{}", "#".repeat(filled), " ".repeat(margin_width - filled));
             stdout.queue(MoveTo(self.cell_width + 1, 1)).unwrap();
             stdout.queue(Clear(ClearType::UntilNewLine)).unwrap();

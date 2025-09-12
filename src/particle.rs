@@ -8,6 +8,13 @@ use std::ops::{AddAssign};
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum ParticleType {
     Rocket,
+    FuelCell,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct ParticleColors {
+    pub foreground: Color,
+    pub background: Color,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -54,6 +61,7 @@ impl Particle {
         position: Option<Coordinate>,
         velocity: Option<Coordinate>,
         acceleration: Option<Coordinate>,
+        kind: ParticleType,
         velocity_cap: Coordinate,
     ) -> Self {
         Self {
@@ -61,8 +69,8 @@ impl Particle {
             velocity: velocity.unwrap_or_default(),
             acceleration: acceleration.unwrap_or_default(),
             color: Color::White,
-            kind: ParticleType::Rocket,
-            fuel: 255,
+            kind,
+            fuel: 510,
             velocity_cap,
         }
     }
@@ -73,6 +81,19 @@ impl Particle {
 
     pub fn set_color(&mut self, color: Color) {
         self.color = color;
+    }
+
+    pub fn get_colors(&self) -> ParticleColors {
+        match self.kind {
+            ParticleType::FuelCell => ParticleColors {
+                foreground: Color::DarkBlue,
+                background: Color::Yellow,
+            },
+            ParticleType::Rocket => ParticleColors {
+                foreground: self.color,
+                background: Color::Black,
+            },
+        }
     }
 
     pub fn update(&mut self, console: &Console, boost: Option<Boost>) {
@@ -108,8 +129,13 @@ impl Particle {
         self.velocity.y = self.velocity.y.clamp(-self.velocity_cap.y, self.velocity_cap.y);
 
         // 4) Integrate position with half-velocity for smoother motion
+        //    Fuel cells move slower by integrating with a larger divisor.
+        let divisor = match self.kind {
+            ParticleType::FuelCell => 4,
+            _ => 2,
+        };
         self.position
-            .add(&Coordinate::new(self.velocity.x / 2, self.velocity.y / 2));
+            .add(&Coordinate::new(self.velocity.x / divisor, self.velocity.y / divisor));
 
         // 5) Bounce off borders
         let as_cell = self.position.to_cell();
@@ -134,6 +160,7 @@ impl Particle {
     pub fn get_particle_char(&self) -> char {
         match self.kind {
             ParticleType::Rocket => self.get_rocket_char(),
+            ParticleType::FuelCell => 'F',
         }
     }
 

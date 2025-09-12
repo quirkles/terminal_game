@@ -5,7 +5,7 @@ mod spatial;
 mod scene;
 
 use crate::console::{Console, DEFAULT_BACKGROUND_COLOR, DEFAULT_FOREGROUND_COLOR};
-use crate::particle::{Particle, Boost};
+use crate::particle::{Particle, ParticleType, Boost};
 use crate::scene::Scene;
 use crate::spatial::{Coordinate, SUBPIXEL_SCALE};
 use crossterm::event::{
@@ -48,6 +48,30 @@ fn main() {
         )),
         None,
         None,
+        ParticleType::Rocket,
+        Coordinate::new(200, 200),
+    );
+
+    // Init a single fuel cell with random velocity
+    let mut fuel_cell = Particle::new(
+        Some(Coordinate::new(
+            ((rand::random::<u16>() % (term_w - 2)) + 1) as i32 * SUBPIXEL_SCALE,
+            ((rand::random::<u16>() % (term_h - 2)) + 1) as i32 * SUBPIXEL_SCALE,
+        )),
+        Some(Coordinate::new(
+            {
+                let mut vx = (rand::random::<i16>() % 2) as i32 * (SUBPIXEL_SCALE / 4);
+                if vx == 0 { vx = SUBPIXEL_SCALE / 4; }
+                vx
+            },
+            {
+                let mut vy = (rand::random::<i16>() % 2) as i32 * (SUBPIXEL_SCALE / 4);
+                if vy == 0 { vy = SUBPIXEL_SCALE / 4; }
+                vy
+            }
+        )),
+        None,
+        ParticleType::FuelCell,
         Coordinate::new(200, 200),
     );
 
@@ -171,8 +195,9 @@ fn main() {
             };
 
             particle.update(&console, boost);
+            fuel_cell.update(&console, None);
 
-            let scene = Scene::new(vec![particle]);
+            let scene = Scene::new(vec![particle, fuel_cell]);
 
             console.draw_scene(
                 scene
