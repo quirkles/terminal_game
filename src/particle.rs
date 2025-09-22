@@ -1,9 +1,11 @@
-use crate::console::Console;
-use crate::spatial::Coordinate;
+use crate::spatial::{Coordinate, ConsoleCell};
 use crossterm::style::Color;
 use std::cmp::max;
 use std::fmt::{Display, Formatter};
 use std::ops::{AddAssign};
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Ord, PartialOrd)]
+pub struct ParticleId(pub u64);
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum ParticleType {
@@ -17,14 +19,23 @@ pub struct ParticleColors {
     pub background: Color,
 }
 
+#[derive(Clone, Debug)]
+pub struct Sprite {
+    // Relative cells to the anchor along with the character and its foreground color.
+    pub cells: Vec<(ConsoleCell, char, Color)>,
+    // The anchor cell; must be one of the entries in `cells`.
+    pub anchor: ConsoleCell,
+}
+
 #[derive(Copy, Clone, Debug)]
 pub enum Boost {
     Brake,
     Coordinate(Coordinate),
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct Particle {
+    pub uid: ParticleId,
     pub position: Coordinate,   // In subpixel coordinates
     pub velocity: Coordinate,   // In subpixel coordinates per frame
     pub acceleration: Coordinate,
@@ -65,6 +76,7 @@ impl Particle {
         velocity_cap: Coordinate,
     ) -> Self {
         Self {
+            uid: ParticleId(0), // will be set when added to the scene
             position: position.unwrap_or_default(),
             velocity: velocity.unwrap_or_default(),
             acceleration: acceleration.unwrap_or_default(),
@@ -96,7 +108,9 @@ impl Particle {
         }
     }
 
-    pub fn update(&mut self, console: &Console, boost: Option<Boost>) {
+    pub fn update(&mut self, bounds: (i32, i32, u16, u16), boost: Option<Boost>) {
+        let (console_width, console_height, cell_width, cell_height) = bounds;
+
         // 1) Handle boost: apply as first step, or reset to 0,0 if none.
         //    If out of fuel, ignore any boost (treated as None).
         if self.fuel == 0 {
@@ -139,16 +153,16 @@ impl Particle {
 
         // 5) Bounce off borders
         let as_cell = self.position.to_cell();
-        if as_cell.y >= console.cell_height - 1 {
-            self.position.y = console.height - (self.position.y - console.height).abs();
+        if as_cell.y >= cell_height - 1 {
+            self.position.y = console_height - (self.position.y - console_height).abs();
             self.velocity.y = self.velocity.y * -1;
         }
         if self.position.y <= 1 {
             self.position.y = self.position.y.abs();
             self.velocity.y = self.velocity.y * -1;
         }
-        if as_cell.x >= (console.cell_width - 1) {
-            self.position.x = console.width - (self.position.x - console.width).abs();
+        if as_cell.x >= (cell_width - 1) {
+            self.position.x = console_width - (self.position.x - console_width).abs();
             self.velocity.x = self.velocity.x * -1;
         }
         if as_cell.x <= 1 {
@@ -157,10 +171,15 @@ impl Particle {
         }
     }
 
-    pub fn get_particle_char(&self) -> char {
-        match self.kind {
+    pub fn get_particle_char(&self) -> Sprite {
+        let ch = match self.kind {
             ParticleType::Rocket => self.get_rocket_char(),
             ParticleType::FuelCell => 'F',
+        };
+        let anchor = ConsoleCell::new(0, 0);
+        Sprite {
+            anchor,
+            cells: vec![(anchor, ch, self.get_colors().foreground)],
         }
     }
 

@@ -1,13 +1,16 @@
-use crate::border::BorderChars;
-use crate::particle::Particle;
-use crate::scene::Scene;
-use crate::spatial::SUBPIXEL_SCALE;
 use crossterm::QueueableCommand;
 use crossterm::cursor::{Hide, MoveTo, MoveToColumn, MoveToRow};
 use crossterm::terminal::{Clear, ClearType};
 use std::io::{Write, stdout};
 use crossterm::style::{Color, SetBackgroundColor, SetForegroundColor};
 use crossterm::style::{Colors, SetColors};
+
+use crate::border::BorderChars;
+use crate::particle::{Particle, Boost, ParticleType, ParticleId};
+use crate::scene::Scene;
+use crate::spatial::SUBPIXEL_SCALE;
+use crate::collision::Collision;
+use crate::game_events::GameEvent; // add: returning events
 
 pub const DEFAULT_FOREGROUND_COLOR: Color = Color::White;
 pub const DEFAULT_BACKGROUND_COLOR: Color = Color::Black;
@@ -17,7 +20,7 @@ pub struct Console {
     pub(crate) cell_height: u16,
     pub(crate) height: i32,
     pub(crate) width: i32,
-    previous_scene: Option<Scene>,
+    scene: Scene,
 }
 
 impl Console {
@@ -27,8 +30,16 @@ impl Console {
             cell_height,
             width: cell_width as i32 * SUBPIXEL_SCALE,
             height: cell_height as i32 * SUBPIXEL_SCALE,
-            previous_scene: None,
+            scene: Scene::new(vec![]),
         }
+    }
+
+    // Find the index of a particle by its stable UID.
+    pub fn find_particle_index_by_id(&self, id: ParticleId) -> Option<usize> {
+        self.scene
+            .particles
+            .iter()
+            .position(|q| q.uid == id)
     }
 
     fn get_border_char(row: u16, col: u16, height: u16, width: u16) -> Option<BorderChars> {
@@ -72,30 +83,53 @@ impl Console {
         self
     }
 
-    pub fn draw_scene(&mut self, scene: Scene) {
+    pub fn add_particle(&mut self, particle: Particle) {
+        self.scene.add_particle(particle);
+    }
+
+    pub fn get_particle(&self, index: usize) -> Option<&Particle> {
+        self.scene.particles.get(index)
+    }
+
+    // Runs a simulation tick:
+    // 1) capture current renderables and erase them;
+    // 2) update existing particles in the scene (in-place) with provided boosts;
+    // 3) draw the new frame.
+    // The boosts vector is applied in scene order; missing entries default to None.
+    pub fn tick(&mut self, boosts: Vec<Option<Boost>>) -> Vec<GameEvent> {
         let mut stdout = stdout();
         stdout.queue(Hide).unwrap();
 
         // 1) Erase previously drawn cells by overwriting them with spaces
-        if let Some(prev) = &self.previous_scene {
-            for (cell, _ch, _color) in prev.get_renderable().particles {
-                if cell.x >= 1
-                    && cell.x < self.cell_width - 1
-                    && cell.y >= 1
-                    && cell.y < self.cell_height - 1
-                {
-                    stdout.queue(MoveTo(cell.x, cell.y)).unwrap();
-                    stdout.queue(SetColors(Colors::new(
-                        DEFAULT_FOREGROUND_COLOR,
-                        DEFAULT_BACKGROUND_COLOR,
-                    ))).unwrap();
-                    stdout.write(" ".as_bytes()).unwrap();
-                }
+        let prev_particles = self.scene.get_renderable(self.cell_width, self.cell_height).cells;
+        for (cell, _ch, _color) in prev_particles {
+            if cell.x >= 1
+                && cell.x < self.cell_width - 1
+                && cell.y >= 1
+                && cell.y < self.cell_height - 1
+            {
+                stdout.queue(MoveTo(cell.x, cell.y)).unwrap();
+                stdout.queue(SetColors(Colors::new(
+                    DEFAULT_FOREGROUND_COLOR,
+                    DEFAULT_BACKGROUND_COLOR,
+                ))).unwrap();
+                stdout.write(" ".as_bytes()).unwrap();
             }
         }
 
-        // 2) Draw current scene cells
-        for (cell, ch, color) in scene.get_renderable().particles {
+        // 2) Update particles in-place
+        let count = self.scene.particles.len();
+        let bounds = (self.width, self.height, self.cell_width, self.cell_height);
+        for i in 0..count {
+            let b = boosts.get(i).cloned().unwrap_or(None);
+            self.scene.particles[i].update(bounds, b);
+        }
+
+        // 3) Build renderable for the new frame (cells + collisions)
+        let renderable_now = self.scene.get_renderable(self.cell_width, self.cell_height);
+
+        // 3a) Draw current scene cells
+        for (cell, ch, color) in renderable_now.cells {
             if cell.x >= 1
                 && cell.x < self.cell_width - 1
                 && cell.y >= 1
@@ -110,11 +144,47 @@ impl Console {
                 stdout.queue(SetBackgroundColor(DEFAULT_BACKGROUND_COLOR)).unwrap();
             }
         }
-
         stdout.flush().unwrap();
 
-        // 3) Store the current scene as previous for the next frame
-        self.previous_scene = Some(scene);
+        // 4) Produce events from collisions (per-collision refuel event)
+        let mut events: Vec<GameEvent> = Vec::new();
+        for coll in renderable_now.collisions {
+            match coll {
+                Collision::Refuel { participants, .. } => {
+                    // pick first rocket and first fuel cell in the group
+                    let mut rocket_idx: Option<usize> = None;
+                    let mut fuel_idx: Option<usize> = None;
+
+                    for pid in participants {
+                        // Resolve stable ParticleId to current scene index
+                        if let Some(idx) = self.find_particle_index_by_id(pid) {
+                            match self.scene.particles[idx].kind {
+                                ParticleType::Rocket if rocket_idx.is_none() => {
+                                    rocket_idx = Some(idx)
+                                }
+                                ParticleType::FuelCell if fuel_idx.is_none() => {
+                                    fuel_idx = Some(idx)
+                                }
+                                _ => {}
+                            }
+                            if rocket_idx.is_some() && fuel_idx.is_some() {
+                                break;
+                            }
+                        }
+                    }
+
+                    if let (Some(ri), Some(fi)) = (rocket_idx, fuel_idx) {
+                        events.push(GameEvent::Refuel {
+                            rocket_idx: ri,
+                            fuel_cell_idx: fi,
+                        });
+                    }
+                }
+            }
+        }
+
+        // Return generated events
+        events
     }
 
     pub fn display_info(&self, particle: &Particle, pressed_button_str: &str) {
@@ -180,5 +250,19 @@ impl Console {
             )
             .unwrap();
         stdout.flush().unwrap();
+    }
+
+    // Set a particle's fuel to the provided amount (no-op if out of bounds).
+    pub fn set_particle_fuel(&mut self, idx: usize, amount: u16) {
+        if let Some(part) = self.scene.particles.get_mut(idx) {
+            part.fuel = amount;
+        }
+    }
+
+    // Remove a particle at the given index (no-op if out of bounds).
+    pub fn remove_particle(&mut self, idx: usize) {
+        if idx < self.scene.particles.len() {
+            self.scene.particles.remove(idx);
+        }
     }
 }

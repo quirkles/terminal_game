@@ -3,10 +3,11 @@ mod console;
 mod particle;
 mod spatial;
 mod scene;
+mod collision;
+mod game_events;
 
 use crate::console::{Console, DEFAULT_BACKGROUND_COLOR, DEFAULT_FOREGROUND_COLOR};
 use crate::particle::{Particle, ParticleType, Boost};
-use crate::scene::Scene;
 use crate::spatial::{Coordinate, SUBPIXEL_SCALE};
 use crossterm::event::{
     Event, KeyCode, KeyEventKind, KeyboardEnhancementFlags, PopKeyboardEnhancementFlags,
@@ -17,6 +18,7 @@ use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
 use std::io::{Write, stdout};
 use std::time::Duration;
 use crossterm::style::{Color, Colors, SetColors};
+use crate::game_events::GameEvent;
 
 fn main() {
     let mut stdout = stdout();
@@ -53,7 +55,7 @@ fn main() {
     );
 
     // Init a single fuel cell with random velocity
-    let mut fuel_cell = Particle::new(
+    let fuel_cell = Particle::new(
         Some(Coordinate::new(
             ((rand::random::<u16>() % (term_w - 2)) + 1) as i32 * SUBPIXEL_SCALE,
             ((rand::random::<u16>() % (term_h - 2)) + 1) as i32 * SUBPIXEL_SCALE,
@@ -76,6 +78,10 @@ fn main() {
     );
 
     particle.set_color(Color::Red);
+
+    // Add particles to the console's scene (initial state)
+    console.add_particle(particle);
+    console.add_particle(fuel_cell);
 
     let mut interrupt_flag = false;
     // Listener for keydown on escape and exit
@@ -194,15 +200,44 @@ fn main() {
                 Some(Boost::Coordinate(Coordinate::new(0, 0)))
             };
 
-            particle.update(&console, boost);
-            fuel_cell.update(&console, None);
+            // Update and draw via console tick (scene order: [rocket, fuel])
+            let events = console.tick(vec![
+                boost,
+                None,
+            ]);
 
-            let scene = Scene::new(vec![particle, fuel_cell]);
+            // Handle events: collect indices to mutate
+            let mut rockets_to_refuel: Vec<usize> = Vec::new();
+            let mut fuel_cells_to_remove: Vec<usize> = Vec::new();
 
-            console.draw_scene(
-                scene
-            );
-            console.display_info(&particle, &pressed_str);
+            for e in events.iter() {
+                match e {
+                    GameEvent::Refuel { rocket_idx, fuel_cell_idx } => {
+                        rockets_to_refuel.push(*rocket_idx);
+                        fuel_cells_to_remove.push(*fuel_cell_idx);
+                    }
+                }
+            }
+
+            // Refill rockets to full (capacity 510)
+            rockets_to_refuel.sort();
+            rockets_to_refuel.dedup();
+            for ri in rockets_to_refuel {
+                console.set_particle_fuel(ri, 510);
+            }
+
+            // Remove fuel cells; remove in descending index order to keep indices valid
+            fuel_cells_to_remove.sort();
+            fuel_cells_to_remove.dedup();
+            fuel_cells_to_remove.sort_by(|a, b| b.cmp(a));
+            for fi in fuel_cells_to_remove {
+                console.remove_particle(fi);
+
+            }
+
+            if let Some(p0) = console.get_particle(0) {
+                console.display_info(p0, &pressed_str);
+            }
             stdout.flush().unwrap();
         }
     }
